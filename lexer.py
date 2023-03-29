@@ -15,10 +15,10 @@ class Lexer():
         # c语言操作符
         self.operators=['+', '-', '*', '/', '%', '++', '--', '==', '!=', '<', '>', '<=', '>=',
         '&&', '||', '!', '&', '|', '^', '~', '<<', '>>', '=', '+=', '-=', '*=',
-        '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '->', '...', ]
+        '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '->', '...', '#']
         # 分隔符
         self.separators=[';',',','(', ')',
-        '[', ']', '{', '}','#','?','.','\\']
+        '[', ']', '{', '}','?','.','\\']
         # 标识符定义
         self.identifier_pattern='[a-zA-Z_][a-zA-Z0-9_]*'
         # 数字定义
@@ -31,7 +31,11 @@ class Lexer():
         self.source_code=""
         self.tokens=[]
         self.token_list=[]
-    def read_tokens(self):
+        self.get_token_list()
+        # # 当前位置
+        # self.pos=0
+    # 读取代码
+    def get_token_list(self):
         with open(self.filename,"r",encoding='utf-8') as f:
             self.source_code=f.read()
         # 定义匹配模式
@@ -62,10 +66,18 @@ class Lexer():
                 self.token_list.append({token:'COMMENT'})
             else:
                 print(f"错误的操作符{token}")
-
+        return self.token_list
+    # 输出词法分析之后的代码
+    def get_next_token(self):
+        if self.pos>len(self.token_list)-1:
+            return {'None':'EOF'}
+        current_char=self.token_list[self.pos]
+        self.pos+=1
+        return current_char
 if __name__=='__main__':
     lexer=Lexer('test.c')
     lexer.read_tokens()
     print(lexer.token_list)
+    print(len(lexer.token_list))
     
     
