@@ -7,9 +7,8 @@ import re
 class Lexer():
     def __init__(self):
         # 关键字
-        self.key_words=['break', 'case', 'der', 'const', 'continue', 'do',
-        'else', 'enum',  'for', 'if',  'return', 'fuck' 'static','struct', 'switch', 'typedef', 
-        'while',]
+        self.key_words=['dick', 'const',  'do','else', 'enum',  'for', 'if',  'return', 'fuck','switch', 
+        'while']
         # 操作符
         self.operators=['+', '-', '*', '/', '%', '++', '--', '==', '!=', '<', '>', '<=', '>=',
         '&&', '||', '!', '&', '|', '^', '~', '<<', '>>', '=', '+=', '-=', '*=',
@@ -44,7 +43,7 @@ class Lexer():
                 token_list.append({'OPER':token})
             # 匹配分隔符
             elif token in self.separators:
-                token_list.append({'SEPARATOR':token})
+                token_list.append({'SEP':token})
             # 匹配字符串
             elif re.match(self.string_pattern, token):
                 token_list.append({'STR':token})
@@ -70,7 +69,5 @@ class Lexer():
     
 if __name__=='__main__':
     lexer=Lexer()
-    print(lexer.token_list)
-    print(len(lexer.token_list))
     
     
