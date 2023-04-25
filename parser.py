@@ -35,7 +35,11 @@ class Parser():
     def check_current_token_type(self, token_type):
         if self.cur_token.get(token_type) == None:
             self.error(f"Expected token type: {token_type} but got {self.cur_token}")
-            
+    # change current token 
+    def change_cur_token(self,token_index):
+        self.token_index=token_index
+        self.cur_token=self.tokens[token_index]
+           
     # read token flows
     def parse(self):
         """
@@ -55,18 +59,6 @@ class Parser():
             self.tokens+=self.Lexer.tokenize(line)
         self.cur_token=self.tokens[0]
         self.parse_global_decl()
-            # self.token_list.append(self.tokens)
-            # for token in self.tokens: 
-            #     if 'COMMENT' in token:
-            #         pass
-            #     elif 'KEY_WORD' in token:
-            #         self.parse_k_w(token,self.tokens)
-            #     elif 'SEP' in token:
-            #         self.parse_sep(token)
-            #     else:
-            #         pass
-            #     pos+=1
-            # self.line_num+=1
             
     # parse global declarations
     def parse_global_decl(self):
@@ -220,25 +212,7 @@ class Parser():
             self.check_sep_token('}')
         else:
             self.rewind_token_stream()
-    # parse if else condition
-    """
-    cond = cond || join | cond && join
-    join = join <= term | join >= term | join < term | join > term | join == term | join != term | term
-    expr = expr + term | expr - term | term
-    term = factor * factor | factor / factor | factor % factor | factor
-    factor = num | str | id 
-    """
-    def parse_cond(self):
-        result=self.parse_join()
-        while self.cur_token.get('OPER') in ['||','&&']:
-            op=self.cur_token['OPER']
-            self.get_next_token()
-            right=self.parse_join()
-            if op=='||':
-                result=result or right
-            elif op=='&&':
-                result=result and right
-        return result
+   
     # parse join
     """    
     join = join <= term | join >= term | join < term | join > term | join == term | join != term | term
@@ -267,8 +241,30 @@ class Parser():
         return result
     
     # parse while statement
+    """
+    while_stmt = while (expression){ statement }
+    """
     def parse_while_stmt(self):
-        pass
+        self.get_next_token()
+        self.check_sep_token('(')
+        self.get_next_token()
+        # record the token index of the condition expression
+        cond_token_index = self.token_index
+        end_token_index = self.token_index
+        cond=self.parse_cond()
+        while(cond):
+            self.check_sep_token(')')
+            self.get_next_token()
+            self.check_sep_token('{') 
+            self.get_next_token()
+            self.parse_stmt()
+            self.get_next_token()
+            self.check_sep_token('}')
+            end_token_index = self.token_index
+            self.change_cur_token(cond_token_index)
+            cond=self.parse_cond()
+        self.change_cur_token(end_token_index)
+        
 
     # parse for statement
     def parse_for_stmt(self):
@@ -300,7 +296,26 @@ class Parser():
     # parse normal expression
     def parse_normal_stmt(self):
         pass
-    
+    # parse  condition
+    """
+    cond = cond || join | cond && join
+    join = join <= term | join >= term | join < term | join > term | join == term | join != term | term
+    expr = expr + term | expr - term | term
+    term = factor * factor | factor / factor | factor % factor | factor
+    factor = num | str | id 
+    """
+    def parse_cond(self):
+        result=self.parse_join()
+        while self.cur_token.get('OPER') in ['||','&&']:
+            op=self.cur_token['OPER']
+            self.get_next_token()
+            right=self.parse_join()
+            if op=='||':
+                result=result or right
+            elif op=='&&':
+                result=result and right
+        print(result)
+        return result 
     # parse expression
     """
     expr = expr + term | expr - term | term
@@ -379,6 +394,7 @@ class Parser():
         if self.cur_token.get('SEP')!=token:
             self.error(f"Expected '{token}', but got '{self.cur_token.get('SEP')}' ")
             
+    # jump the token until the token is the expect token
     def jump_token(self):
         brace_count=1
         while self.cur_token.get('SEP')!='}':

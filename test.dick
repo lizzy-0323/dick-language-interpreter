@@ -9,4 +9,7 @@ fuck main(){
     }else{
         i=2+4
     }
+    while(i<8){
+        i=i+1
+    }
 }
