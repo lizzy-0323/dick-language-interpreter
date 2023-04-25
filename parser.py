@@ -12,6 +12,8 @@ class Parser():
         self.line_num=1
         self.var_map={}
         self.token_index=0
+        
+    # reset to the last token
     def rewind_token_stream(self):
         # set the token stream position back by one
         self.token_index -= 1
@@ -19,10 +21,11 @@ class Parser():
         if self.token_index >= 0 and self.token_index < len(self.tokens):
             self.cur_token = self.tokens[self.token_index]
         else:
-            self.cur_token = None   
+            self.cur_token = None 
+              
     # get token
     def get_next_token(self):
-        self.token_index+=1
+        self.token_index += 1
         if self.token_index > len(self.tokens)-1:
             return {'None':'EOF'}
         self.cur_token=self.tokens[self.token_index]
@@ -68,7 +71,7 @@ class Parser():
     # parse global declarations
     def parse_global_decl(self):
         self.cur_token=self.tokens[self.token_index]
-        while self.token_index<len(self.tokens):
+        while self.token_index<len(self.tokens)-1:
             if self.cur_token.get('KEY_WORD') == 'dick':
                 self.parse_var_decl()
             elif self.cur_token.get('KEY_WORD') == 'fuck':
@@ -77,24 +80,6 @@ class Parser():
                 self.get_next_token()
             else:
                 self.error(f"Unexpected token: {self.cur_token}")
-            
-    # parse key word
-    def parse_k_w(self,token,tokens):
-        """
-        KEY_WORDS := dick | if | while | for | do | return 
-        dick := ID
-        if := ( condition ) { statement }
-        while := ( condition ) { statement }
-        for := ( dick; condition ; statement) { statement }
-        """
-        value=token
-        # if token is a variable
-        key_word=token.get('KEY_WORD')
-        if 'dick' in key_word:
-            self.parse_var(token)
-        # if token is a statement
-        else:
-            self.parse_stmt(token)
             
     # parse separater  
     def parse_sep(self,token):
@@ -154,14 +139,24 @@ class Parser():
         self.check_sep_token('{')
         self.get_next_token()
         self.parse_stmt()
+        self.get_next_token()
+        self.check_sep_token('}')
         
     # parse enum 
     def parse_enum(self):
         pass
     
     # parse statement
+    """
+    stmt = if_stmt | while_stmt | for_stmt| return_stmt | expression_stmt | empty_stmt
+    if_stmt = if (expression){ statement }
+    while_stmt = while (expression){ statement }
+    return_stmt = return expression
+    expression_stmt = expression
+    empty_stmt
+    """
     def parse_stmt(self):
-        if self.cur_token.get('KEY_WORD') == 'if':
+        if self.cur_token.get('KEY_WORD') in ['if','else']:
             self.parse_if_stmt()
         elif self.cur_token.get('KEY_WORD') == 'while':
             self.parse_while_stmt()
@@ -169,14 +164,17 @@ class Parser():
             self.parse_for_stmt()
         elif self.cur_token.get('KEY_WORD') == 'return':
             self.parse_return_stmt()
+        elif self.cur_token.get('ID'):
+            self.parse_expr_stmt()
         else:
-            self.parse_normal_stmt()
-        
-    # parse expression
-    def parse_expr(self):
-        pass
-
+            self.rewind_token_stream()
+            self.parse_empty_stmt()
+            
     # parse if statement
+    """
+    if_stmt = if (expression){ statement } else { statement } | if (expression){ statement }
+    stmt = if_stmt | while_stmt | for_stmt| return_stmt | expression_stmt | empty_stmt
+    """
     def parse_if_stmt(self):
         # check that the current token is "if"
         self.check_current_token_type('KEY_WORD')
@@ -186,9 +184,10 @@ class Parser():
         # get the opening parenthesis of the condition expression
         self.get_next_token()
         self.check_sep_token('(')
-            
+        self.get_next_token()
+        
         # parse the condition expression
-        cond=self.parse_expr()
+        cond=self.parse_cond()
         
         # ensure that the condition expression is a boolean value
         if not isinstance(cond, bool):
@@ -201,25 +200,72 @@ class Parser():
         self.get_next_token()
         self.check_sep_token('{')
 
-        # parse the if statement body
-        self.parse_stmt()
+        # choose which statement to execute based on the condition expression
+        self.get_next_token()
+        stmt_to_execute = self.parse_stmt() if cond else self.jump_token()
 
         # get the closing curly brace of the if statement body
         self.check_sep_token('}')
-        
+
         # check for "else" keyword
         self.get_next_token()
         if self.cur_token == {'KEY_WORD': 'else'}:
             # parse the else statement body
             self.get_next_token()
-            if self.cur_token != {'OPER': '{'}:
-                self.error(f"Expected OPER '{{' but got {self.cur_token}")
-            self.parse_stmt()
-            if self.cur_token != {'OPER': '}'}:
-                self.error(f"Expected OPER '}}' but got {self.cur_token}")
+            self.check_sep_token('{')
+            # choose which statement to execute based on the condition expression
+            self.get_next_token()
+            stmt_to_execute = self.parse_stmt() if not cond else self.jump_token()
+            # check for the closing curly brace of the else statement body
+            self.check_sep_token('}')
         else:
             self.rewind_token_stream()
-            
+    # parse if else condition
+    """
+    cond = cond || join | cond && join
+    join = join <= term | join >= term | join < term | join > term | join == term | join != term | term
+    expr = expr + term | expr - term | term
+    term = factor * factor | factor / factor | factor % factor | factor
+    factor = num | str | id 
+    """
+    def parse_cond(self):
+        result=self.parse_join()
+        while self.cur_token.get('OPER') in ['||','&&']:
+            op=self.cur_token['OPER']
+            self.get_next_token()
+            right=self.parse_join()
+            if op=='||':
+                result=result or right
+            elif op=='&&':
+                result=result and right
+        return result
+    # parse join
+    """    
+    join = join <= term | join >= term | join < term | join > term | join == term | join != term | term
+    expr = expr + term | expr - term | term
+    term = factor * factor | factor / factor | factor % factor | factor
+    factor = num | str | id 
+    """
+    def parse_join(self):
+        result=self.parse_expr()
+        while self.cur_token.get('OPER') in ['<=','>=','<','>','==','!=']:
+            op=self.cur_token['OPER']
+            self.get_next_token()
+            right=self.parse_expr()
+            if op=='<=':
+                result=result<=right
+            elif op=='>=':
+                result=result>=right
+            elif op=='<':
+                result=result<right
+            elif op=='>':
+                result=result>right
+            elif op=='==':
+                result=result==right
+            elif op=='!=':
+                result=result!=right
+        return result
+    
     # parse while statement
     def parse_while_stmt(self):
         pass
@@ -227,9 +273,24 @@ class Parser():
     # parse for statement
     def parse_for_stmt(self):
         pass
-
+    
+    # parse expression statement
+    def parse_expr_stmt(self):
+        variable=self.cur_token['ID']
+        self.get_next_token()
+        if self.cur_token.get('OPER')!='=':
+            self.error(f"Expected '=' but got {self.cur_token}") 
+        self.get_next_token()
+        # process expression
+        self.var_map[variable]=self.parse_expr() 
+        self.get_next_token()
+        self.parse_stmt()
     # parse return statement
     def parse_return_stmt(self):
+        pass
+    
+    # parse empty statement
+    def parse_empty_stmt(self):
         pass
     
     # parse parameter
@@ -241,40 +302,94 @@ class Parser():
         pass
     
     # parse expression
+    """
+    expr = expr + term | expr - term | term
+    term = term * factor | term / factor | factor
+    factor = num | str | id 
+    """
     def parse_expr(self):
-        self.parse_term()
+        result=self.parse_term()
         
         while self.cur_token.get('OPER') in ['+', '-']:
             op = self.cur_token['OPER']
             self.get_next_token()
-            self.parse_term()
+            right = self.parse_term()
+            
+            if op == '+':
+                result += right
+            elif op == '-':
+                result -= right
+        return result
 
     # parse term
     def parse_term(self):
-        self.parse_factor()
+        result=self.parse_factor()
 
         while self.cur_token.get('OPER') in ['*', '/']:
             op = self.cur_token['OPER']
             self.get_next_token()
-            self.parse_factor()
+            right = self.parse_factor()
+            
+            if op == '*':
+                result *= right
+            elif op == '/':
+                result /= right
+        
+        return result
 
     # parse factor
     def parse_factor(self):
-        if self.cur_token.get('NUM'):
+        token = self.cur_token
+
+        if token.get('OPER') in ['-', '+', '!']:
             self.get_next_token()
-        elif self.cur_token.get('ID'):
+            return -self.parse_factor() if token.get('OPER') == '-' else +self.parse_factor() if token.get('OPER') == '+' else not self.parse_factor()
+        else:
+            return self.parse_primary()
+
+            
+    # parse primary type
+    def parse_primary(self):
+        token=self.cur_token
+        if token.get('NUM'):
+            result = int(token['NUM'])
             self.get_next_token()
-        elif self.cur_token.get('OPER') == '(':
+            return result
+        elif token.get('ID'):
+            result = token['ID']
+            value=int(self.var_map.get(result))
+            if value is None:
+                self.error(f"Undefined variable '{var_name}'")
             self.get_next_token()
-            self.parse_expr()
+            return value
+        elif token.get('KEY_WORD') in ['true','false']:
+            self.get_next_token()
+            return token.get('KEY_WORD')=='true'
+        elif token.get('SEP') == '(':
+            self.get_next_token()
+            result = self.parse_expr()
             self.check_sep_token(')')
             self.get_next_token()
+            return result
         else:
-            self.error(f"Unexpected token: {self.cur_token}")
+            self.error(f"Unexpected token: {token}")
+            
     # judge if the token is the expect token
     def check_sep_token(self,token):
         if self.cur_token.get('SEP')!=token:
             self.error(f"Expected '{token}', but got '{self.cur_token.get('SEP')}' ")
+            
+    def jump_token(self):
+        brace_count=1
+        while self.cur_token.get('SEP')!='}':
+            self.get_next_token()
+            if self.cur_token=={'SEP':'{'}:
+                brace_count+=1
+            elif self.cur_token=={'SEP':'}'}:
+                brace_count-=1
+        if brace_count!=0:
+            self.error("Unmatched curly braces")
+            
     # judge if the variable is a local variable
     def is_local_id(self,token):
         pass
@@ -292,5 +407,6 @@ if __name__=='__main__':
     parser.parse()
     print("token_list如下所示")
     print(parser.tokens)
+    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     print("变量表如下所示:")
     print(parser.var_map)
