@@ -8,7 +8,7 @@ class Lexer():
     def __init__(self):
         # 关键字
         self.key_words=['dick', 'const',  'do','else', 'enum',  'for', 'if',  'return', 'fuck','switch', 
-        'while']
+        'while','break']
         # 操作符
         self.operators=['+', '-', '*', '/', '%', '++', '--', '==', '!=', '<', '>', '<=', '>=',
         '&&', '||', '!', '&', '|', '^', '~', '<<', '>>', '=', '+=', '-=', '*=',

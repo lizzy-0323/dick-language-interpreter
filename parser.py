@@ -11,8 +11,9 @@ class Parser():
         self.tokens=[]
         self.line_num=1
         self.var_map={}
+        self.func_map={}
         self.token_index=0
-        
+        self.while_stack=[(-1,-1)]
     # reset to the last token
     def rewind_token_stream(self):
         # set the token stream position back by one
@@ -122,6 +123,7 @@ class Parser():
         self.get_next_token()
         # if the function have params
         if self.cur_token!={'SEP':')'}:
+            # TODO:增加函数参数
             func_param=self.cur_token['ID']
             self.get_next_token()
             self.check_sep_token(')')
@@ -156,10 +158,13 @@ class Parser():
             self.parse_for_stmt()
         elif self.cur_token.get('KEY_WORD') == 'return':
             self.parse_return_stmt()
+        elif self.cur_token.get('KEY_WORD')=='break':
+            self.parse_break_stmt() 
+        elif self.cur_token.get('COMMENT'):
+            self.parse_comment_stmt()
         elif self.cur_token.get('ID'):
             self.parse_expr_stmt()
         else:
-            self.rewind_token_stream()
             self.parse_empty_stmt()
             
     # parse if statement
@@ -245,6 +250,8 @@ class Parser():
     while_stmt = while (expression){ statement }
     """
     def parse_while_stmt(self):
+        # save the while loop index,for 'break' statement
+        start_token_index = self.token_index
         self.get_next_token()
         self.check_sep_token('(')
         self.get_next_token()
@@ -260,12 +267,34 @@ class Parser():
             self.parse_stmt()
             self.get_next_token()
             self.check_sep_token('}')
+            # change the end token index to the current token index,at the end of the loop
             end_token_index = self.token_index
             self.change_cur_token(cond_token_index)
             cond=self.parse_cond()
+        self.while_stack.append((start_token_index,end_token_index))
         self.change_cur_token(end_token_index)
         
+    # parse break statement
+    def parse_break_stmt(self):
+        # check if the current token is "break"
+        start_index, end_index = None, None
+        if len(self.while_stack) > 0:
+            # find the innermost while loop
+            for i in range(len(self.while_stack)-1, -1, -1):
+                start_index, end_index = self.while_stack[i]
+                if end_index is not None:
+                    break
+        if end_index is not None and start_index is not None:
+            # if this is the first iteration of the loop and we encounter a break statement
+            # set the end index to the current token index
+            if start_index == end_index:
+                end_index = self.token_index + 1
+            self.change_cur_token(end_index)
+        else:
+            # ignore break statement outside of any loops
+            self.get_next_token()
 
+        
     # parse for statement
     def parse_for_stmt(self):
         pass
@@ -278,13 +307,18 @@ class Parser():
             self.error(f"Expected '=' but got {self.cur_token}") 
         self.get_next_token()
         # process expression
-        self.var_map[variable]=self.parse_expr() 
-        self.get_next_token()
+        self.var_map[variable]=self.parse_expr()
         self.parse_stmt()
+        
     # parse return statement
     def parse_return_stmt(self):
         pass
     
+    # parse comment statement:
+    def parse_comment_stmt(self):
+        self.get_next_token()
+        self.parse_stmt()
+        
     # parse empty statement
     def parse_empty_stmt(self):
         pass
@@ -296,6 +330,7 @@ class Parser():
     # parse normal expression
     def parse_normal_stmt(self):
         pass
+    
     # parse  condition
     """
     cond = cond || join | cond && join
@@ -314,7 +349,6 @@ class Parser():
                 result=result or right
             elif op=='&&':
                 result=result and right
-        print(result)
         return result 
     # parse expression
     """
@@ -392,7 +426,7 @@ class Parser():
     # judge if the token is the expect token
     def check_sep_token(self,token):
         if self.cur_token.get('SEP')!=token:
-            self.error(f"Expected '{token}', but got '{self.cur_token.get('SEP')}' ")
+            self.error(f"Expected '{token}', but got '{next(iter(self.cur_token.values()))}' ")
             
     # jump the token until the token is the expect token
     def jump_token(self):
